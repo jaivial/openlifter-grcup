@@ -74,7 +74,13 @@ rm -rf \$tmp
 '"
 
 echo "→ DNS $HOST → $IP"
-[ -f "$HOME/.env" ] && { set -a; . "$HOME/.env"; set +a; }
+# only the two Cloudflare variables are read from ~/.env (the file is not sourced)
+for v in CLOUDFLARE_USER CLOUDFLARE_API_KEY; do
+  if [ -z "${!v:-}" ] && [ -f "$HOME/.env" ]; then
+    val=$(grep -E "^$v=" "$HOME/.env" | tail -1 | cut -d= -f2- | sed -E 's/^["'"'"']//; s/["'"'"']$//')
+    export "$v=$val"
+  fi
+done
 : "${CLOUDFLARE_USER:?falta CLOUDFLARE_USER}" "${CLOUDFLARE_API_KEY:?falta CLOUDFLARE_API_KEY}"
 HOST="$HOST" IP="$IP" ZONE="$ZONE" COMMENT="$COMMENT" python3 - <<'PY'
 import json, os, urllib.request
