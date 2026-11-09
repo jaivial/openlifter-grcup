@@ -130,10 +130,14 @@ const GrcupContainer = () => {
       setEditando({});
     });
 
-  const vinculadosIds = useMemo(
-    () => new Set((g.mesaEstado ? g.mesaEstado.vinculos : []).map((v) => v.atletaId || "")),
-    [g.mesaEstado],
-  );
+  // athletes linked to an entry of this browser's registration (the platform may keep entries of another laptop)
+  const vinculadosIds = useMemo(() => {
+    const locales = new Set(meet.registration.entries.map((e) => e.id));
+    return new Set(
+      (g.mesaEstado ? g.mesaEstado.vinculos : []).filter((v) => locales.has(v.entryId)).map((v) => v.atletaId || ""),
+    );
+  }, [g.mesaEstado, meet.registration.entries]);
+
   const nuevos = useMemo(() => importables(atletas, meet, vinculadosIds), [atletas, meet, vinculadosIds]);
 
   const importar = () =>
@@ -156,7 +160,8 @@ const GrcupContainer = () => {
       setMsg(`${cambios.length} atletas añadidos y vinculados. Revisa flights y lotes en «Registration».`);
     });
 
-  const vinculos = g.mesaEstado ? g.mesaEstado.vinculos : [];
+  const locales = new Set(meet.registration.entries.map((e) => e.id));
+  const vinculos = (g.mesaEstado ? g.mesaEstado.vinculos : []).filter((v) => locales.has(v.entryId));
   const revisar = vinculos.filter((v) => v.vinculo === "sugerido" || v.vinculo === "sin_coincidencia");
   const lista = filtro === "revisar" ? revisar : vinculos;
   const vinculados = vinculos.filter((v) => v.vinculo === "auto" || v.vinculo === "confirmado").length;
