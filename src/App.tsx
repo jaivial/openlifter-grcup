@@ -32,6 +32,7 @@ import FlightOrderContainer from "./containers/FlightOrderContainer";
 import ResultsContainer from "./containers/ResultsContainer";
 import DebugContainer from "./containers/DebugContainer";
 import AboutContainer from "./containers/AboutContainer";
+import GrcupContainer from "./containers/GrcupContainer";
 import Navigation from "./components/Navigation";
 
 import configureStore from "./store";
@@ -66,6 +67,7 @@ class App extends React.Component {
                   <Route path="/results" element={<ResultsContainer />} />
                   <Route path="/debug" element={<DebugContainer />} />
                   <Route path="/about" element={<AboutContainer />} />
+                  <Route path="/grcup" element={<GrcupContainer />} />
                 </Routes>
               </div>
             </BrowserRouter>

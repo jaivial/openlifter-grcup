@@ -18,8 +18,10 @@
 
 // Defines the Navigation component for navigating between pages using react-router.
 
-import React from "react";
+import React, { useEffect } from "react";
 import { FormattedMessage } from "react-intl";
+
+import Badge from "react-bootstrap/Badge";
 
 import Nav from "react-bootstrap/Nav";
 import Navbar from "react-bootstrap/Navbar";
@@ -28,7 +30,27 @@ import Navbar from "react-bootstrap/Navbar";
 // hooking them up with the Router.
 import { LinkContainer } from "react-router-bootstrap";
 
+// GR Cup fork: link to the synchronisation page, with its state.
+import { useGrcup } from "../containers/GrcupContainer";
+import { renovar } from "../grcup/api";
+import { setUsuario } from "../grcup/sync";
+
+const colores = {
+  desconectado: "secondary",
+  sincronizado: "success",
+  pendiente: "warning",
+  enviando: "info",
+  error: "danger",
+};
+
 const Navigation = () => {
+  const g = useGrcup();
+  useEffect(() => {
+    // GR Cup fork: restore the platform session (httpOnly refresh cookie) when the app opens.
+    renovar()
+      .then((u) => u && setUsuario(u))
+      .catch(() => undefined);
+  }, []);
   return (
     <Navbar sticky="top" bg="dark" variant="dark" expand="lg">
       <Navbar.Brand>
@@ -73,6 +95,20 @@ const Navigation = () => {
           <LinkContainer to="/results">
             <Nav.Link>
               <FormattedMessage id="nav.results" defaultMessage="Results" />
+            </Nav.Link>
+          </LinkContainer>
+          <LinkContainer to="/grcup">
+            <Nav.Link>
+              GR Cup{" "}
+              <Badge variant={(g.activo && g.usuario ? colores[g.estado] : "secondary") as any}>
+                {!g.activo || !g.usuario
+                  ? "off"
+                  : g.estado === "sincronizado"
+                    ? "✓"
+                    : g.estado === "error"
+                      ? "!"
+                      : g.pendientes || "…"}
+              </Badge>
             </Nav.Link>
           </LinkContainer>
           <LinkContainer to="/debug">

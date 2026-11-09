@@ -1,3 +1,30 @@
+# OpenLifter · GR Cup fork
+
+Fork of [OpenLifter](https://gitlab.com/openpowerlifting/openlifter) (AGPLv3+) used as the competition desk of the
+GR Strength Cup. The screens and the scoring are OpenLifter's; the fork adds one page, **GR Cup**, and a background
+synchronisation with the GR Cup platform (Go microservices, `platform/` of github.com/jaivial/grweb):
+
+- sign in with a GR Cup backoffice account (permission «directo.operar»), choose the competition and start syncing;
+- every change of an entry (weigh-in, racks, attempt weights, good / no lift) and of the lifting group on screen is
+  sent to `POST /api/admin/competiciones/{cid}/openlifter/sync` (service `openlifter`), which links each entry with
+  an athlete of the competition and applies it to `athletes` (weigh-in) and `live` (attempts, results, live flight);
+  the public pages (/en-directo, /horarios, arena screen) follow it by SSE;
+- pending changes survive a reload and are retried while there is no network: OpenLifter keeps working offline;
+- «Añadir atletas que faltan» creates the registration from the platform, already linked;
+- the page lists the entries to review (suggested athlete or none) and lets the desk confirm, change or ignore them.
+
+Code: `src/grcup/` (API client, sync middleware, import), `src/containers/GrcupContainer.tsx` (page), small hooks in
+`src/store.ts`, `src/App.tsx`, `src/components/Navigation.tsx` and the source link in `AboutContainer.tsx`.
+
+Deploy (host nginx on kraken, `/api` → platform gateway on the same origin):
+
+```bash
+deploy/desplegar.sh qa                          # https://grcup-qa-openlifter.menustudioai.com (tailnet, QA)
+deploy/desplegar.sh prod --confirmo-produccion  # https://grcup-openlifter.menustudioai.com (public, production)
+```
+
+---
+
 # OpenLifter
 
 > Simple software for running a local powerlifting competition.

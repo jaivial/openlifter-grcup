@@ -161,6 +161,14 @@ class AboutContainer extends React.Component<{}> {
                   />
                 </p>
                 <pre>{licenseText}</pre>
+                {/* GR Cup fork: AGPL §13, the source of this modified version. */}
+                <p>
+                  Esta versión es una modificación de OpenLifter para la GR Strength Cup (sincronización con la
+                  plataforma GR Cup). Código fuente:{" "}
+                  <a href="https://github.com/jaivial/openlifter-grcup" rel="noopener noreferrer" target="_blank">
+                    github.com/jaivial/openlifter-grcup
+                  </a>
+                </p>
                 <a href="https://www.gnu.org/licenses/agpl-3.0.en.html" rel="noopener noreferrer" target="_blank">
                   <FormattedMessage
                     id="about.link-full-agpl-license"

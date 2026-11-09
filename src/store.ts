@@ -23,6 +23,7 @@ import storage from "redux-persist/lib/storage";
 
 import thunk from "redux-thunk";
 import rootReducer from "./reducers/rootReducer";
+import { grcupMiddleware } from "./grcup/sync";
 
 import { GlobalState } from "./types/stateTypes";
 
@@ -34,7 +35,11 @@ const persistConfig = {
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 export default function configureStore(initialState: Partial<GlobalState> = {}) {
-  const store = createStore(persistedReducer, initialState, composeWithDevTools(applyMiddleware(thunk)));
+  const store = createStore(
+    persistedReducer,
+    initialState,
+    composeWithDevTools(applyMiddleware(thunk, grcupMiddleware)),
+  );
   const persistor = persistStore(store as any);
   return { store, persistor };
 }
