@@ -10,7 +10,7 @@
 
 import { Middleware } from "redux";
 
-import { api, ApiError, Usuario, Competicion } from "./api";
+import { api, ApiError, Usuario, Competicion, renovar, setModoAuto } from "./api";
 import { Entry } from "../types/dataTypes";
 import { GlobalState } from "../types/stateTypes";
 
@@ -44,6 +44,7 @@ export type EstadoMesa = {
 };
 
 export type GrcupState = {
+  auto: boolean; // connected with the desk key configured on the server (no login)
   usuario: Usuario | null;
   competicion: Competicion | null;
   mesa: string; // pinned key of this OpenLifter meet on the platform
@@ -78,6 +79,7 @@ function leer(): Persistido {
 const persistido = leer();
 
 let state: GrcupState = {
+  auto: false,
   usuario: null,
   competicion: persistido.competicion,
   mesa: persistido.mesa,
@@ -280,7 +282,7 @@ async function enviar() {
     });
   } catch (e) {
     const err = e as ApiError;
-    if (err.status === 401) {
+    if (err.status === 401 && !state.auto) {
       set({ usuario: null, estado: "error", error: err.message });
     } else {
       set({ estado: "error", error: err.message || "Sin conexión con GR Cup. Se reintentará." });
@@ -322,6 +324,44 @@ export function sincronizarTodo() {
 
 export function aplicarEstado(r: EstadoMesa) {
   set({ mesaEstado: r });
+}
+
+// iniciar runs once when the app opens. If the server publishes /grcup-config.json with «auto», this desk is
+// connected by default to that competition (the server holds the key); otherwise the GR Cup session is restored
+// from the platform's refresh cookie, if any.
+export async function iniciar(): Promise<void> {
+  try {
+    const res = await fetch("/grcup-config.json", { cache: "no-store" });
+    const cfg = res.ok ? await res.json() : null;
+    if (cfg && cfg.auto && cfg.competicion && cfg.competicion.id) {
+      setModoAuto(true);
+      const usuario: Usuario = {
+        id: "",
+        email: "",
+        nombre: cfg.nombre || "Mesa GR Cup",
+        root: false,
+        competiciones: [],
+      };
+      const cambia = !state.competicion || state.competicion.id !== cfg.competicion.id;
+      dirty.todo = true;
+      dirty.grupo = true;
+      guardarDirty();
+      // a desk paused by hand stays paused on reload; a new competition always starts
+      set({
+        auto: true,
+        usuario,
+        competicion: cfg.competicion,
+        activo: cambia || state.activo || !state.mesa,
+        error: "",
+      });
+      programar(0);
+      return;
+    }
+  } catch (e) {
+    // no config (local development): manual login
+  }
+  const u = await renovar().catch(() => null);
+  if (u) setUsuario(u);
 }
 
 // Retry when the network comes back.

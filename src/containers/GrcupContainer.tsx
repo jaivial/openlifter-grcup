@@ -61,6 +61,7 @@ const GrcupContainer = () => {
   const [cid, setCid] = useState(g.competicion ? g.competicion.id : "");
   const [mesa, setMesa] = useState(g.mesa || mesaPorDefecto(meet));
   const [atletas, setAtletas] = useState<Array<AtletaGR>>([]);
+  const [cargando, setCargando] = useState(false);
   const [elegidos, setElegidos] = useState<Record<number, string>>({});
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
@@ -69,6 +70,11 @@ const GrcupContainer = () => {
   const [editando, setEditando] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
+    if (g.auto && g.competicion) {
+      setComps([g.competicion]);
+      setCid(g.competicion.id);
+      return;
+    }
     if (!g.usuario) return;
     competiciones()
       .then((cs) => {
@@ -76,14 +82,16 @@ const GrcupContainer = () => {
         if (!cid && cs.length > 0) setCid(cs[0].id);
       })
       .catch((e) => setError(e.message));
-  }, [g.usuario]);
+  }, [g.usuario, g.auto, g.competicion]);
 
   const compId = g.competicion ? g.competicion.id : "";
   useEffect(() => {
     if (!g.usuario || !compId) return;
+    setCargando(true);
     api<{ atletas: Array<AtletaGR> }>("GET", `/api/admin/competiciones/${compId}/openlifter/atletas`)
       .then((r) => setAtletas(r.atletas))
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setCargando(false));
   }, [g.usuario, compId]);
 
   const run = async (fn: () => Promise<void>) => {
@@ -210,12 +218,18 @@ const GrcupContainer = () => {
                 </Form>
               ) : (
                 <div>
-                  <p>
-                    Sesión: <b>{g.usuario.nombre || g.usuario.email}</b>{" "}
-                    <Button variant="link" size="sm" onClick={salir}>
-                      Cerrar sesión
-                    </Button>
-                  </p>
+                  {g.auto ? (
+                    <p>
+                      Conectada automáticamente a GR Cup como <b>{g.usuario.nombre}</b>. No hace falta iniciar sesión.
+                    </p>
+                  ) : (
+                    <p>
+                      Sesión: <b>{g.usuario.nombre || g.usuario.email}</b>{" "}
+                      <Button variant="link" size="sm" onClick={salir}>
+                        Cerrar sesión
+                      </Button>
+                    </p>
+                  )}
                   <Form.Group>
                     <Form.Label>Competición</Form.Label>
                     <Form.Control
@@ -273,13 +287,14 @@ const GrcupContainer = () => {
               <Card.Header>Atletas de GR Cup</Card.Header>
               <Card.Body>
                 <p>
-                  {atletas.length} atletas confirmados en GR Cup · {vinculados} entradas vinculadas.
+                  {cargando ? "Cargando atletas de GR Cup…" : `${atletas.length} atletas confirmados en GR Cup`} ·{" "}
+                  {vinculados} entradas vinculadas.
                 </p>
                 <p>
                   Crea la inscripción desde GR Cup para que cada entrada quede vinculada sin revisar nada: nombre, sexo,
                   fecha de nacimiento, categoría, club, licencia (MemberID), flight, peso corporal y primeros intentos.
                 </p>
-                <Button onClick={importar} disabled={ocupado || nuevos.length === 0}>
+                <Button onClick={importar} disabled={ocupado || cargando || nuevos.length === 0}>
                   {nuevos.length > 0 ? `Añadir ${nuevos.length} atletas que faltan` : "No falta ningún atleta"}
                 </Button>
               </Card.Body>

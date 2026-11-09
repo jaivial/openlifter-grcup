@@ -24,6 +24,11 @@ export class ApiError extends Error {
 }
 
 let accessToken = "";
+// Automatic mode: the server (nginx) adds this desk's GR Cup key to the openlifter calls; no login, no token here.
+let modoAuto = false;
+export const setModoAuto = (v: boolean) => {
+  modoAuto = v;
+};
 let expiresAt = 0;
 let refreshing: Promise<boolean> | null = null;
 
@@ -94,6 +99,23 @@ async function asegurarToken(): Promise<boolean> {
 }
 
 export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (modoAuto) {
+    const res = await fetch(path, {
+      method,
+      credentials: "same-origin",
+      headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401 || res.status === 403) {
+      throw new ApiError(
+        res.status,
+        "La clave de GR Cup de esta mesa no es válida o se ha revocado. Avisa al equipo técnico.",
+        "CLAVE",
+      );
+    }
+    if (!res.ok) throw await leerError(res);
+    return (res.status === 204 ? undefined : await res.json()) as T;
+  }
   for (let intento = 0; intento < 2; intento++) {
     if (!(await asegurarToken()))
       throw new ApiError(401, "La sesión de GR Cup ha caducado: vuelve a iniciar sesión.", "SESION");

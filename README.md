@@ -16,6 +16,12 @@ synchronisation with the GR Cup platform (Go microservices, `platform/` of githu
 Code: `src/grcup/` (API client, sync middleware, import), `src/containers/GrcupContainer.tsx` (page), small hooks in
 `src/store.ts`, `src/App.tsx`, `src/components/Navigation.tsx` and the source link in `AboutContainer.tsx`.
 
+Automatic connection (no login): put a GR Cup personal token (`grc_…`, scope `directo.operar`, competition `grcup`)
+in `~/.env` as `GRCUP_OPENLIFTER_KEY_QA` / `GRCUP_OPENLIFTER_KEY_PROD` before deploying. nginx adds it only to
+`/api/admin/competiciones/<cid>/openlifter/*` (root-only file on kraken, never in the JS bundle) and the app reads
+`/grcup-config.json` to connect to that competition by default. In production set `MESA_IPS` (the venue's IP) so the
+key only works from the desk. Without a key, the desk signs in with its own account.
+
 Deploy (host nginx on kraken, `/api` → platform gateway on the same origin):
 
 ```bash

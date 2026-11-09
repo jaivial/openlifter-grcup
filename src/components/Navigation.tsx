@@ -32,8 +32,7 @@ import { LinkContainer } from "react-router-bootstrap";
 
 // GR Cup fork: link to the synchronisation page, with its state.
 import { useGrcup } from "../containers/GrcupContainer";
-import { renovar } from "../grcup/api";
-import { setUsuario } from "../grcup/sync";
+import { iniciar } from "../grcup/sync";
 
 const colores = {
   desconectado: "secondary",
@@ -46,10 +45,8 @@ const colores = {
 const Navigation = () => {
   const g = useGrcup();
   useEffect(() => {
-    // GR Cup fork: restore the platform session (httpOnly refresh cookie) when the app opens.
-    renovar()
-      .then((u) => u && setUsuario(u))
-      .catch(() => undefined);
+    // GR Cup fork: automatic connection (server key) or the saved platform session.
+    iniciar();
   }, []);
   return (
     <Navbar sticky="top" bg="dark" variant="dark" expand="lg">

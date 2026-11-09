@@ -1,6 +1,7 @@
 # OpenLifter · GR Cup fork (__HOST__). Installed by deploy/desplegar.sh (__ENTORNO__).
 # Static app from __ROOT__; /api goes to the GR Cup gateway on the same origin, so the platform's refresh cookie
-# (SameSite=Strict, path /api/auth) works and there is no CORS.
+# (SameSite=Strict, path /api/auth) works and there is no CORS. With a desk key, only the openlifter endpoints of
+# the configured competition get it (Authorization added here, from a root-only file: never in the JS bundle).
 
 server {
     __LISTEN80__
@@ -23,6 +24,7 @@ server {
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "same-origin" always;
 
+__MESA__
     location /api/ {
         proxy_pass http://__UPSTREAM__;
         proxy_http_version 1.1;
