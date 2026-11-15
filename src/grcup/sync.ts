@@ -166,6 +166,10 @@ export const grcupMiddleware: Middleware = (api0) => {
         if (antes.get(e.id) !== e) dirty.ids.add(e.id);
         antes.delete(e.id);
       });
+      // Safety net: an action that names its entry marks it even if a reducer mutated the object in place
+      // (the identity check above would miss it, as ENTER_ATTEMPT did before).
+      const eid = action && action.entryId !== undefined ? Number(action.entryId) : NaN;
+      if (!isNaN(eid) && cur.registration.entries.some((e) => e.id === eid)) dirty.ids.add(eid);
       antes.forEach((_e, id) => {
         dirty.borradas.add(id);
         dirty.ids.delete(id);
@@ -292,7 +296,10 @@ async function enviar() {
     enviando = false;
     localStorage.setItem(LS, JSON.stringify(persistido));
   }
-  if (hayPendiente() && state.usuario) programar(state.estado === "error" ? espera : 100);
+  if (hayPendiente() && state.usuario) {
+    // backoff with ±20 % jitter so several desks do not retry in lockstep
+    programar(state.estado === "error" ? Math.round(espera * (0.8 + Math.random() * 0.4)) : 100);
+  }
 }
 
 // ---- actions of the GR Cup page ----
@@ -364,7 +371,13 @@ export async function iniciar(): Promise<void> {
   if (u) setUsuario(u);
 }
 
-// Retry when the network comes back.
+// Retry when the network comes back or the desk tab is shown again (a sleeping laptop may miss «online»).
 if (typeof window !== "undefined") {
-  window.addEventListener("online", () => programar(0));
+  const reintentar = () => {
+    if (state.estado === "error" || hayPendiente()) programar(0);
+  };
+  window.addEventListener("online", reintentar);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") reintentar();
+  });
 }
