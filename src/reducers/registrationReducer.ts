@@ -172,7 +172,7 @@ export default function registrationReducer(
       newfields[field] = newarray;
 
       // Make a new entry from the old entry, with the attempts field overwritten.
-      newEntries[index] = Object.assign(oldEntry, newfields);
+      newEntries[index] = Object.assign({}, oldEntry, newfields);
 
       return {
         ...state,
