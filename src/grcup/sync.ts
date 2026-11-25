@@ -278,7 +278,8 @@ async function enviar() {
     grupo: { day: s.lifting.day, platform: s.lifting.platform, flight: s.lifting.flight, lift: s.lifting.lift },
     entradas: Array.from(enviadas.values()).map(aEntrada),
     borradas,
-    ...(meet ? { meet: s.meet } : {}),
+    // the setup of a named meet (not OpenLifter's empty «New Meet») is kept for «Competiciones preparadas»
+    ...(meet && s.meet.name.trim() !== "" ? { meet: s.meet } : {}),
   };
   enviando = true;
   set({ estado: "enviando" });

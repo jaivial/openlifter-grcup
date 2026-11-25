@@ -80,6 +80,8 @@ const GrcupContainer = () => {
   const [filtro, setFiltro] = useState<"revisar" | "todos">("revisar");
   const [editando, setEditando] = useState<Record<number, boolean>>({});
   const [meets, setMeets] = useState<Array<MeetResumen> | null>(null);
+  const [meetsError, setMeetsError] = useState("");
+  const [recargar, setRecargar] = useState(0);
   const [apertura, setApertura] = useState<{ texto: string; aviso: string } | null>(null);
 
   useEffect(() => {
@@ -102,13 +104,11 @@ const GrcupContainer = () => {
   useEffect(() => {
     if (!g.usuario || !listaCid) return;
     setMeets(null);
+    setMeetsError("");
     listarMeets(listaCid)
       .then(setMeets)
-      .catch((e) => {
-        setMeets([]);
-        setError(e.message);
-      });
-  }, [g.usuario, listaCid]);
+      .catch((e) => setMeetsError(e.message || "No se pudieron leer las competiciones de GR Cup."));
+  }, [g.usuario, listaCid, recargar]);
 
   const compId = g.competicion ? g.competicion.id : "";
   useEffect(() => {
@@ -269,7 +269,14 @@ const GrcupContainer = () => {
         <Card style={{ marginBottom: 16 }}>
           <Card.Header>Competiciones preparadas</Card.Header>
           <Card.Body>
-            {meets === null ? (
+            {meetsError ? (
+              <div>
+                <Alert variant="danger">{meetsError}</Alert>
+                <Button variant="outline-primary" onClick={() => setRecargar(recargar + 1)}>
+                  Reintentar
+                </Button>
+              </div>
+            ) : meets === null ? (
               <p style={{ margin: 0 }}>Cargando las competiciones de GR Cup…</p>
             ) : meets.length === 0 ? (
               <p style={{ margin: 0 }}>
