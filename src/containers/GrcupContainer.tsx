@@ -1,7 +1,8 @@
 // vim: set ts=2 sts=2 sw=2 et:
 //
-// GR Cup fork: the «GR Cup» page. Sign in with a GR Cup backoffice account, choose the competition, start the
-// synchronisation, import the athletes, and review how each OpenLifter entry is linked to an athlete.
+// GR Cup fork: the «GR Cup» page. Sign in with a GR Cup backoffice account and open one of the «Competiciones
+// preparadas» on the server (or choose the competition and start the synchronisation by hand), import the athletes,
+// and review how each OpenLifter entry is linked to an athlete.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -20,10 +21,12 @@ import styles from "../components/common/ContentArea.module.scss";
 
 import { api, competiciones, login, logout, Competicion } from "../grcup/api";
 import {
+  abrirMesa,
   aplicarEstado,
   conectar,
   EstadoMesa,
   getGrcup,
+  hayCambiosSinEnviar,
   mesaPorDefecto,
   pausar,
   setUsuario,
@@ -32,6 +35,7 @@ import {
   Vinculo,
 } from "../grcup/sync";
 import { clave, importables, AtletaGR } from "../grcup/importar";
+import { descargarMeet, estadoDe, listarMeets, MeetResumen } from "../grcup/preparadas";
 import { newRegistration } from "../actions/registrationActions";
 import { GlobalState } from "../types/stateTypes";
 
@@ -44,6 +48,13 @@ const etiquetas: Record<Vinculo["vinculo"], [string, string]> = {
 };
 
 const pct = (x: number) => `${Math.round(x * 100)} %`;
+
+const fechaLarga = (f: string) => {
+  const d = new Date(`${f}T12:00:00`);
+  return isNaN(d.getTime())
+    ? f || "sin fecha"
+    : d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+};
 
 export function useGrcup() {
   const [g, setG] = useState(getGrcup());
@@ -68,6 +79,7 @@ const GrcupContainer = () => {
   const [ocupado, setOcupado] = useState(false);
   const [filtro, setFiltro] = useState<"revisar" | "todos">("revisar");
   const [editando, setEditando] = useState<Record<number, boolean>>({});
+  const [meets, setMeets] = useState<Array<MeetResumen> | null>(null);
 
   useEffect(() => {
     if (g.auto && g.competicion) {
@@ -83,6 +95,19 @@ const GrcupContainer = () => {
       })
       .catch((e) => setError(e.message));
   }, [g.usuario, g.auto, g.competicion]);
+
+  // «Competiciones preparadas» of the chosen competition (the desk's own, once connected)
+  const listaCid = g.activo && g.competicion ? g.competicion.id : cid;
+  useEffect(() => {
+    if (!g.usuario || !listaCid) return;
+    setMeets(null);
+    listarMeets(listaCid)
+      .then(setMeets)
+      .catch((e) => {
+        setMeets([]);
+        setError(e.message);
+      });
+  }, [g.usuario, listaCid]);
 
   const compId = g.competicion ? g.competicion.id : "";
   useEffect(() => {
@@ -128,6 +153,33 @@ const GrcupContainer = () => {
     const c = comps.find((x) => x.id === cid);
     if (c) conectar(c, mesa || mesaPorDefecto(meet));
   };
+
+  const abrir = (m: MeetResumen) =>
+    run(async () => {
+      const c =
+        comps.find((x) => x.id === listaCid) || (g.competicion && g.competicion.id === listaCid ? g.competicion : null);
+      if (!c) return;
+      const tieneDatos = meet.registration.entries.length > 0 || meet.meet.name !== "";
+      if (
+        tieneDatos &&
+        hayCambiosSinEnviar() &&
+        !window.confirm(
+          `Este navegador tiene cambios de «${
+            meet.meet.name || "la competición abierta"
+          }» que aún no han llegado a GR Cup. ` + `Si abres «${m.nombre}» se perderán. ¿Abrir igualmente?`,
+        )
+      )
+        return;
+      const r = await descargarMeet(c.id, m.mesa);
+      abrirMesa(c, r.mesa, estadoDe(r, meet.language));
+      setMesa(r.mesa);
+      setMsg(
+        `«${m.nombre}» abierta: ${r.entradas.length} atletas. ` +
+          (r.horario.asignadas > 0
+            ? `Día, plataforma, flight y lote de ${r.horario.asignadas} atletas según el horario publicado (v${r.horario.version}).`
+            : r.horario.aviso || ""),
+      );
+    });
 
   const vincular = (cambios: Array<{ entryId: number; atletaId?: string; ignorar?: boolean }>) =>
     run(async () => {
@@ -211,6 +263,54 @@ const GrcupContainer = () => {
 
   return (
     <Container className={styles.contentArea}>
+      {g.usuario && (
+        <Card style={{ marginBottom: 16 }}>
+          <Card.Header>Competiciones preparadas</Card.Header>
+          <Card.Body>
+            {meets === null ? (
+              <p style={{ margin: 0 }}>Cargando las competiciones de GR Cup…</p>
+            ) : meets.length === 0 ? (
+              <p style={{ margin: 0 }}>
+                No hay competiciones preparadas en GR Cup para esta competición. Carga la competición en OpenLifter y
+                empieza a sincronizar: quedará guardada aquí.
+              </p>
+            ) : (
+              <Row>
+                {meets.map((m) => {
+                  const abierta = g.activo && g.mesa === m.mesa && meet.meet.name === m.nombre;
+                  return (
+                    <Col md={6} lg={4} key={m.mesa} style={{ marginBottom: 8 }}>
+                      <Card border={abierta ? "success" : undefined} style={{ height: "100%" }}>
+                        <Card.Body>
+                          <Card.Title>{m.nombre || m.mesa}</Card.Title>
+                          <Card.Subtitle className="text-muted" style={{ marginBottom: 8 }}>
+                            {fechaLarga(m.fecha)}
+                          </Card.Subtitle>
+                          <p>
+                            <b>{m.atletas}</b> atletas · {m.vinculados} vinculados con GR Cup
+                          </p>
+                          {abierta && (
+                            <p>
+                              <Badge variant="success">Abierta en este navegador</Badge>
+                            </p>
+                          )}
+                          <Button
+                            variant={abierta ? "outline-primary" : "primary"}
+                            disabled={ocupado}
+                            onClick={() => abrir(m)}
+                          >
+                            {abierta ? "Volver a abrir" : "Abrir"}
+                          </Button>
+                        </Card.Body>
+                      </Card>
+                    </Col>
+                  );
+                })}
+              </Row>
+            )}
+          </Card.Body>
+        </Card>
+      )}
       <Row>
         <Col md={5}>
           <Card>

@@ -60,7 +60,9 @@ export async function login(email: string, password: string): Promise<Usuario> {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, cliente: "web" }),
+    // recordar: the refresh cookie outlives the browser, so the desk signs in once for the whole competition
+    // (identity renews it on every use, up to its REFRESH_TTL)
+    body: JSON.stringify({ email, password, cliente: "web", recordar: true }),
   });
   if (!res.ok) throw await leerError(res);
   return guardar(await res.json());
