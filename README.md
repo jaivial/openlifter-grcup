@@ -4,23 +4,23 @@ Fork of [OpenLifter](https://gitlab.com/openpowerlifting/openlifter) (AGPLv3+) u
 GR Strength Cup. The screens and the scoring are OpenLifter's; the fork adds one page, **GR Cup**, and a background
 synchronisation with the GR Cup platform (Go microservices, `platform/` of github.com/jaivial/grweb):
 
-- sign in with a GR Cup backoffice account (permission «directo.operar»), choose the competition and start syncing;
+- a login gate in front of everything: nothing of OpenLifter renders (any screen, any route) until a GR Cup backoffice
+  account (permission «directo.operar») signs in; the session lasts 30 days with silent renewal, and «Cerrar sesión»
+  is on the right of the navbar;
+- right after signing in, the desk opens the predetermined meet of its competition by itself (no file, no card to
+  choose; a different meet with changes not sent yet is replaced only if the desk says so);
 - every change of an entry (weigh-in, racks, attempt weights, good / no lift) and of the lifting group on screen is
   sent to `POST /api/admin/competiciones/{cid}/openlifter/sync` (service `openlifter`), which links each entry with
   an athlete of the competition and applies it to `athletes` (weigh-in) and `live` (attempts, results, live flight);
   the public pages (/en-directo, /horarios, arena screen) follow it by SSE;
-- pending changes survive a reload and are retried while there is no network: OpenLifter keeps working offline;
+- pending changes survive a reload and are retried while there is no network: once signed in, OpenLifter keeps
+  working offline (a lost network never closes the session; only an expired or revoked one brings the gate back);
 - «Añadir atletas que faltan» creates the registration from the platform, already linked;
 - the page lists the entries to review (suggested athlete or none) and lets the desk confirm, change or ignore them.
 
-Code: `src/grcup/` (API client, sync middleware, import), `src/containers/GrcupContainer.tsx` (page), small hooks in
+Code: `src/grcup/` (API client, session, sync middleware, import), `src/components/LoginGate.tsx` (gate),
+`src/containers/GrcupContainer.tsx` (synchronisation panel), small hooks in
 `src/store.ts`, `src/App.tsx`, `src/components/Navigation.tsx` and the source link in `AboutContainer.tsx`.
-
-Automatic connection (no login): put a GR Cup personal token (`grc_…`, scope `directo.operar`, competition `grcup`)
-in `~/.env` as `GRCUP_OPENLIFTER_KEY_QA` / `GRCUP_OPENLIFTER_KEY_PROD` before deploying. nginx adds it only to
-`/api/admin/competiciones/<cid>/openlifter/*` (root-only file on kraken, never in the JS bundle) and the app reads
-`/grcup-config.json` to connect to that competition by default. In production set `MESA_IPS` (the venue's IP) so the
-key only works from the desk. Without a key, the desk signs in with its own account.
 
 Deploy (host nginx on kraken, `/api` → platform gateway on the same origin):
 

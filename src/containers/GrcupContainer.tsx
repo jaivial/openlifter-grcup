@@ -1,8 +1,8 @@
 // vim: set ts=2 sts=2 sw=2 et:
 //
-// GR Cup fork: the «GR Cup» page. Sign in with a GR Cup backoffice account and open one of the «Competiciones
-// preparadas» on the server (or choose the competition and start the synchronisation by hand), import the athletes,
-// and review how each OpenLifter entry is linked to an athlete.
+// GR Cup fork: the synchronisation panel. The desk is already signed in (login gate) and its predetermined meet
+// opened; here it sees the sync state, reopens a «Competición preparada» (or chooses the competition and starts the
+// synchronisation by hand), imports the athletes and reviews how each OpenLifter entry is linked to an athlete.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -19,7 +19,7 @@ import Table from "react-bootstrap/Table";
 
 import styles from "../components/common/ContentArea.module.scss";
 
-import { api, competiciones, login, logout, Competicion } from "../grcup/api";
+import { api, competiciones, Competicion } from "../grcup/api";
 import {
   abrirMesa,
   aplicarEstado,
@@ -29,13 +29,14 @@ import {
   hayCambiosSinEnviar,
   mesaPorDefecto,
   pausar,
-  setUsuario,
+  setGrcup,
   sincronizarTodo,
   subscribeGrcup,
   Vinculo,
 } from "../grcup/sync";
 import { clave, importables, AtletaGR } from "../grcup/importar";
 import { descargarMeet, estadoDe, listarMeets, MeetResumen } from "../grcup/preparadas";
+import { textoApertura } from "../grcup/sesion";
 import { newRegistration } from "../actions/registrationActions";
 import { GlobalState } from "../types/stateTypes";
 
@@ -66,8 +67,6 @@ const GrcupContainer = () => {
   const g = useGrcup();
   const meet = useSelector((s: GlobalState) => s);
   const dispatch = useDispatch();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [comps, setComps] = useState<Array<Competicion>>([]);
   const [cid, setCid] = useState(g.competicion ? g.competicion.id : "");
   const [mesa, setMesa] = useState(g.mesa || mesaPorDefecto(meet));
@@ -82,14 +81,9 @@ const GrcupContainer = () => {
   const [meets, setMeets] = useState<Array<MeetResumen> | null>(null);
   const [meetsError, setMeetsError] = useState("");
   const [recargar, setRecargar] = useState(0);
-  const [apertura, setApertura] = useState<{ texto: string; aviso: string } | null>(null);
+  const apertura = g.apertura;
 
   useEffect(() => {
-    if (g.auto && g.competicion) {
-      setComps([g.competicion]);
-      setCid(g.competicion.id);
-      return;
-    }
     if (!g.usuario) return;
     competiciones()
       .then((cs) => {
@@ -97,7 +91,7 @@ const GrcupContainer = () => {
         if (!cid && cs.length > 0) setCid(cs[0].id);
       })
       .catch((e) => setError(e.message));
-  }, [g.usuario, g.auto, g.competicion]);
+  }, [g.usuario]);
 
   // «Competiciones preparadas» of the chosen competition (the desk's own, once connected)
   const listaCid = g.activo && g.competicion ? g.competicion.id : cid;
@@ -135,21 +129,6 @@ const GrcupContainer = () => {
     }
   };
 
-  const entrar = (ev: React.FormEvent) => {
-    ev.preventDefault();
-    run(async () => {
-      setUsuario(await login(email.trim(), password));
-      setPassword("");
-    });
-  };
-
-  const salir = () =>
-    run(async () => {
-      pausar();
-      await logout();
-      setUsuario(null);
-    });
-
   const iniciar = () => {
     const c = comps.find((x) => x.id === cid);
     if (c) conectar(c, mesa || mesaPorDefecto(meet));
@@ -173,14 +152,7 @@ const GrcupContainer = () => {
       const r = await descargarMeet(c.id, m.mesa);
       abrirMesa(c, r.mesa, estadoDe(r, meet.language));
       setMesa(r.mesa);
-      setApertura({
-        texto:
-          `«${m.nombre}» abierta: ${r.entradas.length} atletas, sincronizando con GR Cup.` +
-          (r.horario.asignadas > 0
-            ? ` Día, plataforma, flight y lote de ${r.horario.asignadas} atletas según el horario publicado (v${r.horario.version}).`
-            : ""),
-        aviso: r.horario.aviso || "",
-      });
+      setGrcup({ apertura: textoApertura(m.nombre, r) });
     });
 
   const vincular = (cambios: Array<{ entryId: number; atletaId?: string; ignorar?: boolean }>) =>
@@ -298,9 +270,10 @@ const GrcupContainer = () => {
                           <p>
                             <b>{m.atletas}</b> atletas · {m.vinculados} vinculados con GR Cup
                           </p>
-                          {abierta && (
+                          {(abierta || m.predeterminada) && (
                             <p>
-                              <Badge variant="success">Abierta en este navegador</Badge>
+                              {abierta && <Badge variant="success">Abierta en este navegador</Badge>}{" "}
+                              {m.predeterminada && <Badge variant="info">Se abre al entrar</Badge>}
                             </p>
                           )}
                           <Button
@@ -327,47 +300,11 @@ const GrcupContainer = () => {
           <Card>
             <Card.Header>GR Cup · conexión</Card.Header>
             <Card.Body>
-              {!g.usuario ? (
-                <Form onSubmit={entrar}>
-                  <p>Entra con tu cuenta del backoffice de GR Cup (necesita el permiso «Operar el directo»).</p>
-                  <Form.Group>
-                    <Form.Label>Email</Form.Label>
-                    <Form.Control
-                      type="email"
-                      value={email}
-                      onChange={(e: any) => setEmail(e.target.value)}
-                      autoComplete="username"
-                      required
-                    />
-                  </Form.Group>
-                  <Form.Group>
-                    <Form.Label>Contraseña</Form.Label>
-                    <Form.Control
-                      type="password"
-                      value={password}
-                      onChange={(e: any) => setPassword(e.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
-                  </Form.Group>
-                  <Button type="submit" disabled={ocupado}>
-                    Entrar
-                  </Button>
-                </Form>
-              ) : (
+              {g.usuario && (
                 <div>
-                  {g.auto ? (
-                    <p>
-                      Conectada automáticamente a GR Cup como <b>{g.usuario.nombre}</b>. No hace falta iniciar sesión.
-                    </p>
-                  ) : (
-                    <p>
-                      Sesión: <b>{g.usuario.nombre || g.usuario.email}</b>{" "}
-                      <Button variant="link" size="sm" onClick={salir}>
-                        Cerrar sesión
-                      </Button>
-                    </p>
-                  )}
+                  <p>
+                    Sesión: <b>{g.usuario.nombre || g.usuario.email}</b> (cierra la sesión desde la barra superior)
+                  </p>
                   <Form.Group>
                     <Form.Label>Competición</Form.Label>
                     <Form.Control

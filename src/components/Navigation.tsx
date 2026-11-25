@@ -18,10 +18,11 @@
 
 // Defines the Navigation component for navigating between pages using react-router.
 
-import React, { useEffect } from "react";
+import React from "react";
 import { FormattedMessage } from "react-intl";
 
 import Badge from "react-bootstrap/Badge";
+import Button from "react-bootstrap/Button";
 
 import Nav from "react-bootstrap/Nav";
 import Navbar from "react-bootstrap/Navbar";
@@ -30,9 +31,9 @@ import Navbar from "react-bootstrap/Navbar";
 // hooking them up with the Router.
 import { LinkContainer } from "react-router-bootstrap";
 
-// GR Cup fork: link to the synchronisation page, with its state.
+// GR Cup fork: the synchronisation state (link to its panel) and «Cerrar sesión», on the right.
 import { useGrcup } from "../containers/GrcupContainer";
-import { iniciar } from "../grcup/sync";
+import { salir } from "../grcup/sesion";
 
 const colores = {
   desconectado: "secondary",
@@ -44,10 +45,6 @@ const colores = {
 
 const Navigation = () => {
   const g = useGrcup();
-  useEffect(() => {
-    // GR Cup fork: automatic connection (server key) or the saved platform session.
-    iniciar();
-  }, []);
   return (
     <Navbar sticky="top" bg="dark" variant="dark" expand="lg">
       <Navbar.Brand>
@@ -94,12 +91,19 @@ const Navigation = () => {
               <FormattedMessage id="nav.results" defaultMessage="Results" />
             </Nav.Link>
           </LinkContainer>
-          <LinkContainer to="/grcup">
+          <LinkContainer to="/debug">
             <Nav.Link>
-              GR Cup{" "}
-              <Badge variant={(g.activo && g.usuario ? colores[g.estado] : "secondary") as any}>
-                {!g.activo || !g.usuario
-                  ? "off"
+              <FormattedMessage id="nav.debug" defaultMessage="Debug" />
+            </Nav.Link>
+          </LinkContainer>
+        </Nav>
+        <Nav className="ml-auto" style={{ alignItems: "center" }}>
+          <LinkContainer to="/grcup">
+            <Nav.Link title="Sincronización con GR Cup y vínculos con los atletas">
+              Sincronización{" "}
+              <Badge variant={(g.activo ? colores[g.estado] : "secondary") as any}>
+                {!g.activo
+                  ? "pausada"
                   : g.estado === "sincronizado"
                     ? "✓"
                     : g.estado === "error"
@@ -108,11 +112,12 @@ const Navigation = () => {
               </Badge>
             </Nav.Link>
           </LinkContainer>
-          <LinkContainer to="/debug">
-            <Nav.Link>
-              <FormattedMessage id="nav.debug" defaultMessage="Debug" />
-            </Nav.Link>
-          </LinkContainer>
+          <Navbar.Text style={{ marginLeft: 8, marginRight: 8 }}>
+            {g.usuario ? g.usuario.nombre || g.usuario.email : ""}
+          </Navbar.Text>
+          <Button variant="outline-light" size="sm" onClick={() => salir()}>
+            Cerrar sesión
+          </Button>
         </Nav>
       </Navbar.Collapse>
     </Navbar>

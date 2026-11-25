@@ -34,6 +34,7 @@ import DebugContainer from "./containers/DebugContainer";
 import AboutContainer from "./containers/AboutContainer";
 import GrcupContainer from "./containers/GrcupContainer";
 import Navigation from "./components/Navigation";
+import LoginGate from "./components/LoginGate";
 
 import configureStore from "./store";
 
@@ -54,23 +55,26 @@ class App extends React.Component {
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
           <OpenLifterIntlProvider>
-            <BrowserRouter basename={process.env.REACT_APP_ROUTER_BASENAME}>
-              <div>
-                <Navigation />
-                <Routes>
-                  <Route path="/" element={<RootContainer />} />
-                  <Route path="/meet-setup" element={<MeetSetupContainer />} />
-                  <Route path="/registration" element={<RegistrationContainer />} />
-                  <Route path="/weigh-ins" element={<WeighinsContainer />} />
-                  <Route path="/flight-order" element={<FlightOrderContainer />} />
-                  <Route path="/lifting" element={<LiftingContainer />} />
-                  <Route path="/results" element={<ResultsContainer />} />
-                  <Route path="/debug" element={<DebugContainer />} />
-                  <Route path="/about" element={<AboutContainer />} />
-                  <Route path="/grcup" element={<GrcupContainer />} />
-                </Routes>
-              </div>
-            </BrowserRouter>
+            {/* GR Cup fork: nothing renders, on any route, until the desk signs in. */}
+            <LoginGate>
+              <BrowserRouter basename={process.env.REACT_APP_ROUTER_BASENAME}>
+                <div>
+                  <Navigation />
+                  <Routes>
+                    <Route path="/" element={<RootContainer />} />
+                    <Route path="/meet-setup" element={<MeetSetupContainer />} />
+                    <Route path="/registration" element={<RegistrationContainer />} />
+                    <Route path="/weigh-ins" element={<WeighinsContainer />} />
+                    <Route path="/flight-order" element={<FlightOrderContainer />} />
+                    <Route path="/lifting" element={<LiftingContainer />} />
+                    <Route path="/results" element={<ResultsContainer />} />
+                    <Route path="/debug" element={<DebugContainer />} />
+                    <Route path="/about" element={<AboutContainer />} />
+                    <Route path="/grcup" element={<GrcupContainer />} />
+                  </Routes>
+                </div>
+              </BrowserRouter>
+            </LoginGate>
           </OpenLifterIntlProvider>
         </PersistGate>
       </Provider>

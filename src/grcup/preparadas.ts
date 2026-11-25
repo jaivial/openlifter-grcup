@@ -16,6 +16,8 @@ export type MeetResumen = {
   atletas: number;
   vinculados: number;
   actualizado: string;
+  predeterminada: boolean; // the desk opens it by itself after signing in
+  niveles?: Record<string, string>; // AEP level of each OpenLifter day («1»: «aep2»)
 };
 
 export type Horario = {
@@ -33,6 +35,7 @@ export type MeetCompleto = {
   entradas: Array<Record<string, unknown>>;
   grupo?: { day: number; platform: number; flight: string; lift: "S" | "B" | "D" };
   horario: Horario;
+  niveles?: Record<string, string>;
 };
 
 export const listarMeets = (cid: string) =>
