@@ -80,6 +80,7 @@ const GrcupContainer = () => {
   const [filtro, setFiltro] = useState<"revisar" | "todos">("revisar");
   const [editando, setEditando] = useState<Record<number, boolean>>({});
   const [meets, setMeets] = useState<Array<MeetResumen> | null>(null);
+  const [apertura, setApertura] = useState<{ texto: string; aviso: string } | null>(null);
 
   useEffect(() => {
     if (g.auto && g.competicion) {
@@ -164,21 +165,22 @@ const GrcupContainer = () => {
         tieneDatos &&
         hayCambiosSinEnviar() &&
         !window.confirm(
-          `Este navegador tiene cambios de «${
-            meet.meet.name || "la competición abierta"
-          }» que aún no han llegado a GR Cup. ` + `Si abres «${m.nombre}» se perderán. ¿Abrir igualmente?`,
+          `Este navegador tiene cambios de «${meet.meet.name || "la competición abierta"}» que aún no han ` +
+            `llegado a GR Cup. Si abres «${m.nombre}» se perderán. ¿Abrir igualmente?`,
         )
       )
         return;
       const r = await descargarMeet(c.id, m.mesa);
       abrirMesa(c, r.mesa, estadoDe(r, meet.language));
       setMesa(r.mesa);
-      setMsg(
-        `«${m.nombre}» abierta: ${r.entradas.length} atletas. ` +
+      setApertura({
+        texto:
+          `«${m.nombre}» abierta: ${r.entradas.length} atletas, sincronizando con GR Cup.` +
           (r.horario.asignadas > 0
-            ? `Día, plataforma, flight y lote de ${r.horario.asignadas} atletas según el horario publicado (v${r.horario.version}).`
-            : r.horario.aviso || ""),
-      );
+            ? ` Día, plataforma, flight y lote de ${r.horario.asignadas} atletas según el horario publicado (v${r.horario.version}).`
+            : ""),
+        aviso: r.horario.aviso || "",
+      });
     });
 
   const vincular = (cambios: Array<{ entryId: number; atletaId?: string; ignorar?: boolean }>) =>
@@ -308,6 +310,8 @@ const GrcupContainer = () => {
                 })}
               </Row>
             )}
+            {apertura && <Alert variant="success">{apertura.texto}</Alert>}
+            {apertura && apertura.aviso && <Alert variant="warning">{apertura.aviso}</Alert>}
           </Card.Body>
         </Card>
       )}

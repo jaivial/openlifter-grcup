@@ -23,6 +23,7 @@ export type Horario = {
   version?: number;
   sesiones: number;
   asignadas: number;
+  sinSesion: number;
   aviso?: string;
 };
 
