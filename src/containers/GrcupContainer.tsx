@@ -31,7 +31,7 @@ import {
   subscribeGrcup,
   Vinculo,
 } from "../grcup/sync";
-import { importables, AtletaGR } from "../grcup/importar";
+import { clave, importables, AtletaGR } from "../grcup/importar";
 import { newRegistration } from "../actions/registrationActions";
 import { GlobalState } from "../types/stateTypes";
 
@@ -165,6 +165,17 @@ const GrcupContainer = () => {
         if (atletaId) cambios.push({ entryId: id, atletaId });
         if (x.atleta.padron) padron.push({ inscripcionId: x.atleta.id, entryId: id });
         id += 1;
+      }
+      // A roll row skipped because its athlete (same name) is created in this import or is already on the desk
+      // still gets that entry.
+      const porNombre = new Map(meet.registration.entries.map((e) => [clave(e.name), e.id]));
+      nuevos.forEach((x, i) => porNombre.set(clave(x.atleta.nombre), meet.registration.nextEntryId + i));
+      const reportadas = new Set(padron.map((p) => p.inscripcionId));
+      for (const a of atletas) {
+        const entryId = porNombre.get(clave(a.nombre));
+        if (a.padron && !reportadas.has(a.id) && entryId !== undefined && a.entryId !== entryId) {
+          padron.push({ inscripcionId: a.id, entryId });
+        }
       }
       if (cambios.length > 0) {
         const r = await api<EstadoMesa>("PUT", `/api/admin/competiciones/${g.competicion.id}/openlifter/vinculos`, {
