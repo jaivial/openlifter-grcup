@@ -88,11 +88,13 @@ const GrcupContainer = () => {
   useEffect(() => {
     if (!g.usuario || !compId) return;
     setCargando(true);
-    api<{ atletas: Array<AtletaGR> }>("GET", `/api/admin/competiciones/${compId}/openlifter/atletas`)
+    // The desk key tells the level (AEP 2 / AEP 3): only its athletes, plus its AEP roll.
+    const q = g.mesa ? `?mesa=${encodeURIComponent(g.mesa)}` : "";
+    api<{ atletas: Array<AtletaGR> }>("GET", `/api/admin/competiciones/${compId}/openlifter/atletas${q}`)
       .then((r) => setAtletas(r.atletas))
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
-  }, [g.usuario, compId]);
+  }, [g.usuario, compId, g.mesa]);
 
   const run = async (fn: () => Promise<void>) => {
     setOcupado(true);
@@ -155,17 +157,31 @@ const GrcupContainer = () => {
         return;
       let id = meet.registration.nextEntryId;
       const cambios: Array<{ entryId: number; atletaId: string }> = [];
+      const padron: Array<{ inscripcionId: string; entryId: number }> = [];
       for (const x of nuevos) {
         dispatch(newRegistration(x.entrada));
-        cambios.push({ entryId: id, atletaId: x.atleta.id });
+        // a roll row is linked with its athlete only once the platform matched it (BIZ-211)
+        const atletaId = x.atleta.padron ? x.atleta.atletaId : x.atleta.id;
+        if (atletaId) cambios.push({ entryId: id, atletaId });
+        if (x.atleta.padron) padron.push({ inscripcionId: x.atleta.id, entryId: id });
         id += 1;
       }
-      const r = await api<EstadoMesa>("PUT", `/api/admin/competiciones/${g.competicion.id}/openlifter/vinculos`, {
-        mesa: g.mesa,
-        cambios,
-      });
-      aplicarEstado(r);
-      setMsg(`${cambios.length} atletas añadidos y vinculados. Revisa flights y lotes en «Registration».`);
+      if (cambios.length > 0) {
+        const r = await api<EstadoMesa>("PUT", `/api/admin/competiciones/${g.competicion.id}/openlifter/vinculos`, {
+          mesa: g.mesa,
+          cambios,
+        });
+        aplicarEstado(r);
+      }
+      if (padron.length > 0) {
+        await api("PUT", `/api/admin/competiciones/${g.competicion.id}/openlifter/padron`, {
+          mesa: g.mesa,
+          enlaces: padron,
+        });
+      }
+      setMsg(
+        `${nuevos.length} atletas añadidos (${cambios.length} vinculados, ${padron.length} del padrón AEP). Revisa flights y lotes en «Registration».`,
+      );
     });
 
   const locales = new Set(meet.registration.entries.map((e) => e.id));
@@ -287,8 +303,13 @@ const GrcupContainer = () => {
               <Card.Header>Atletas de GR Cup</Card.Header>
               <Card.Body>
                 <p>
-                  {cargando ? "Cargando atletas de GR Cup…" : `${atletas.length} atletas confirmados en GR Cup`} ·{" "}
-                  {vinculados} entradas vinculadas.
+                  {cargando
+                    ? "Cargando atletas de GR Cup…"
+                    : `${atletas.filter((a) => !a.padron).length} atletas confirmados en GR Cup` +
+                      (atletas.some((a) => a.padron)
+                        ? ` · ${atletas.filter((a) => a.padron).length} en el padrón AEP`
+                        : "")}{" "}
+                  · {vinculados} entradas vinculadas.
                 </p>
                 <p>
                   Crea la inscripción desde GR Cup para que cada entrada quede vinculada sin revisar nada: nombre, sexo,
