@@ -38,13 +38,16 @@ const tarjeta: React.CSSProperties = {
   border: "1px solid #333",
 };
 
+// 16px keeps iOS Safari from zooming in when a field takes focus; ::placeholder inherits it.
+const campo: React.CSSProperties = { fontSize: 16 };
+
 const Marca = () => (
   <div style={{ textAlign: "center", marginBottom: 24 }}>
     <img
-      alt="GR Cup"
-      src="https://jaimedigitalstudio.b-cdn.net/grcup/logos/grcuplogo.png"
-      height={56}
-      style={{ marginBottom: 12 }}
+      alt="OpenLifter"
+      src="/openlifter-white.svg"
+      width={220}
+      style={{ display: "block", maxWidth: "100%", height: "auto", margin: "0 auto 12px" }}
     />
     <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Mesa de competición</h1>
     <p style={{ fontSize: 14, color: "#a8a8a8", margin: "4px 0 0" }}>OpenLifter · GR Cup</p>
@@ -112,6 +115,7 @@ const LoginGate = ({ children }: { children: React.ReactNode }) => {
             value={email}
             onChange={(e: any) => setEmail(e.target.value)}
             autoComplete="username"
+            style={campo}
             autoFocus
             required
           />
@@ -123,6 +127,7 @@ const LoginGate = ({ children }: { children: React.ReactNode }) => {
             value={password}
             onChange={(e: any) => setPassword(e.target.value)}
             autoComplete="current-password"
+            style={campo}
             required
           />
         </Form.Group>
