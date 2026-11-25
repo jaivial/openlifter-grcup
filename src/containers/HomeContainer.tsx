@@ -252,12 +252,6 @@ class HomeContainer extends React.Component<Props, InternalState> {
             <Row>
               <Col md={8}>
                 <div>
-                  {/* GR Cup fork: the desk signs in and opens its meet from the server, no file needed. */}
-                  <LinkContainer to="/grcup">
-                    <Button variant="primary" block style={buttonMargin}>
-                      Competiciones de GR Cup (entrar y abrir)
-                    </Button>
-                  </LinkContainer>
                   {newMeetButton}
 
                   <Button variant="warning" block onClick={this.handleLoadClick} style={buttonMargin}>

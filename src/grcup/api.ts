@@ -24,12 +24,12 @@ export class ApiError extends Error {
 }
 
 let accessToken = "";
-// Automatic mode: the server (nginx) adds this desk's GR Cup key to the openlifter calls; no login, no token here.
-let modoAuto = false;
-export const setModoAuto = (v: boolean) => {
-  modoAuto = v;
-};
 let expiresAt = 0;
+// The app shows the login gate again when the session can no longer be renewed (expired or revoked mid-use).
+let alCaducar: () => void = () => undefined;
+export const onSesionCaducada = (fn: () => void) => {
+  alCaducar = fn;
+};
 let refreshing: Promise<boolean> | null = null;
 
 type Sesion = { accessToken: string; expiresAt: string; usuario: Usuario };
@@ -68,13 +68,17 @@ export async function login(email: string, password: string): Promise<Usuario> {
   return guardar(await res.json());
 }
 
-// renovar rotates the refresh cookie and returns the user, or null when there is no valid session.
+// renovar rotates the refresh cookie and returns the user, or null when there is no valid session. Without network
+// or with the platform down it throws: the session is not lost for that (the desk keeps working offline).
 export async function renovar(): Promise<Usuario | null> {
-  const res = await fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" });
-  if (!res.ok) {
+  const res = await fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" }).catch(() => {
+    throw new ApiError(0, "Sin conexión con GR Cup. Se reintentará.", "RED");
+  });
+  if (res.status === 401 || res.status === 403) {
     accessToken = "";
     return null;
   }
+  if (!res.ok) throw await leerError(res);
   return guardar(await res.json());
 }
 
@@ -92,7 +96,6 @@ async function asegurarToken(): Promise<boolean> {
   if (!refreshing) {
     refreshing = renovar()
       .then((u) => u !== null)
-      .catch(() => false)
       .finally(() => {
         refreshing = null;
       });
@@ -100,27 +103,16 @@ async function asegurarToken(): Promise<boolean> {
   return refreshing;
 }
 
+const caducada = () => {
+  accessToken = "";
+  expiresAt = 0;
+  alCaducar();
+  return new ApiError(401, "La sesión de GR Cup ha caducado: vuelve a iniciar sesión.", "SESION");
+};
+
 export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
-  if (modoAuto) {
-    const res = await fetch(path, {
-      method,
-      credentials: "same-origin",
-      headers: body !== undefined ? { "Content-Type": "application/json" } : {},
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (res.status === 401 || res.status === 403) {
-      throw new ApiError(
-        res.status,
-        "La clave de GR Cup de esta mesa no es válida o se ha revocado. Avisa al equipo técnico.",
-        "CLAVE",
-      );
-    }
-    if (!res.ok) throw await leerError(res);
-    return (res.status === 204 ? undefined : await res.json()) as T;
-  }
   for (let intento = 0; intento < 2; intento++) {
-    if (!(await asegurarToken()))
-      throw new ApiError(401, "La sesión de GR Cup ha caducado: vuelve a iniciar sesión.", "SESION");
+    if (!(await asegurarToken())) throw caducada();
     const res = await fetch(path, {
       method,
       credentials: "same-origin",
@@ -138,7 +130,7 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
     if (res.status === 204) return undefined as unknown as T;
     return (await res.json()) as T;
   }
-  throw new ApiError(401, "La sesión de GR Cup ha caducado: vuelve a iniciar sesión.", "SESION");
+  throw caducada();
 }
 
 export const competiciones = () => api<Array<Competicion>>("GET", "/api/admin/competiciones");

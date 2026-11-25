@@ -23,6 +23,7 @@ export type AtletaGR = {
   rackSq?: number;
   rackBp?: string;
   prueba?: string; // «aep2», «aep3»
+  dia?: number; // OpenLifter day of its level on this desk (a meet with one level per day)
   // AEP roll rows: id is the roll row, atletaId the athlete linked with it (if any).
   padron?: boolean;
   atletaId?: string;
@@ -101,7 +102,7 @@ export function importables(
         ...(a.padron ? notasPadron(a, anioMeet) : {}),
         flight: (FLIGHTS.includes(letra) && letra ? letra : "A") as Flight,
         platform: a.plataforma && a.plataforma > 0 ? a.plataforma : 1,
-        day: 1,
+        day: a.dia && a.dia > 0 ? a.dia : 1,
         bodyweightKg: a.pesoCorporal || 0,
         squatRackInfo: a.rackSq ? String(a.rackSq) : "",
         benchRackInfo: a.rackBp || "",

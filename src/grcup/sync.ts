@@ -10,7 +10,7 @@
 
 import { Middleware } from "redux";
 
-import { api, ApiError, Usuario, Competicion, renovar, setModoAuto } from "./api";
+import { api, ApiError, Usuario, Competicion } from "./api";
 import { overwriteStore } from "../actions/globalActions";
 import { Entry } from "../types/dataTypes";
 import { GlobalState } from "../types/stateTypes";
@@ -45,7 +45,10 @@ export type EstadoMesa = {
 };
 
 export type GrcupState = {
-  auto: boolean; // connected with the desk key configured on the server (no login)
+  comprobando: boolean; // the saved session is being checked (the gate shows nothing else meanwhile)
+  abriendo: string; // name of the meet being opened right after signing in ("" none)
+  apertura: { texto: string; aviso: string } | null; // what the last opening of a GR Cup meet did
+  errorSesion: string; // the saved session could not be checked (no network)
   usuario: Usuario | null;
   competicion: Competicion | null;
   mesa: string; // pinned key of this OpenLifter meet on the platform
@@ -80,7 +83,10 @@ function leer(): Persistido {
 const persistido = leer();
 
 let state: GrcupState = {
-  auto: false,
+  comprobando: true,
+  abriendo: "",
+  apertura: null,
+  errorSesion: "",
   usuario: null,
   competicion: persistido.competicion,
   mesa: persistido.mesa,
@@ -114,16 +120,46 @@ function set(p: Partial<GrcupState>) {
 
 // ---- pending changes ----
 
-// meet: the meet setup changed (the server keeps it for «Competiciones preparadas»).
-type Dirty = { todo: boolean; ids: Array<number>; borradas: Array<number>; grupo: boolean; meet?: boolean };
-const dirty: { todo: boolean; ids: Set<number>; borradas: Set<number>; grupo: boolean; meet: boolean } = (() => {
+// meet: the meet setup must be sent (the server keeps it for «Competiciones preparadas»); editado: the desk changed
+// the setup by hand (unlike a loaded file or a reload, which only resend what GR Cup already has).
+type Dirty = {
+  todo: boolean;
+  ids: Array<number>;
+  borradas: Array<number>;
+  grupo: boolean;
+  meet?: boolean;
+  editado?: boolean;
+};
+const dirty: {
+  todo: boolean;
+  ids: Set<number>;
+  borradas: Set<number>;
+  grupo: boolean;
+  meet: boolean;
+  editado: boolean;
+} = (() => {
   try {
     const d: Dirty = JSON.parse(localStorage.getItem(LS_DIRTY) || "null");
-    if (d) return { todo: d.todo, ids: new Set(d.ids), borradas: new Set(d.borradas), grupo: d.grupo, meet: !!d.meet };
+    if (d)
+      return {
+        todo: d.todo,
+        ids: new Set(d.ids),
+        borradas: new Set(d.borradas),
+        grupo: d.grupo,
+        meet: !!d.meet,
+        editado: !!d.editado,
+      };
   } catch (e) {
     // ignore
   }
-  return { todo: false, ids: new Set<number>(), borradas: new Set<number>(), grupo: false, meet: false };
+  return {
+    todo: false,
+    ids: new Set<number>(),
+    borradas: new Set<number>(),
+    grupo: false,
+    meet: false,
+    editado: false,
+  };
 })();
 
 function guardarDirty() {
@@ -133,6 +169,7 @@ function guardarDirty() {
     borradas: Array.from(dirty.borradas),
     grupo: dirty.grupo,
     meet: dirty.meet,
+    editado: dirty.editado,
   };
   localStorage.setItem(LS_DIRTY, JSON.stringify(d));
 }
@@ -180,7 +217,10 @@ export const grcupMiddleware: Middleware = (api0) => {
       });
     }
     if (prev.lifting !== cur.lifting) dirty.grupo = true;
-    if (prev.meet !== cur.meet) dirty.meet = true;
+    if (prev.meet !== cur.meet) {
+      dirty.meet = true;
+      if (!action || (action.type !== "OVERWRITE_STORE" && action.type !== "persist/REHYDRATE")) dirty.editado = true;
+    }
     if (prev !== cur) {
       guardarDirty();
       programar(300);
@@ -237,7 +277,7 @@ function programar(ms: number) {
     pendientes: contarPendientes(),
     estado: !state.activo ? "desconectado" : state.estado === "error" ? "error" : enviando ? "enviando" : "pendiente",
   });
-  if (!state.activo || !state.usuario || !state.competicion) return;
+  if (!state.activo || !state.usuario || !state.competicion || state.abriendo) return;
   if (timer) clearTimeout(timer);
   timer = setTimeout(enviar, ms);
 }
@@ -246,14 +286,14 @@ function hayPendiente() {
   return dirty.todo || dirty.ids.size > 0 || dirty.borradas.size > 0 || dirty.grupo || dirty.meet;
 }
 
-// Changes of this browser that GR Cup has not received yet.
+// Changes made on this browser that GR Cup has not received yet (not the full resend after a reload or a load).
 export function hayCambiosSinEnviar(): boolean {
-  return hayPendiente();
+  return dirty.ids.size > 0 || dirty.borradas.size > 0 || dirty.editado;
 }
 
 async function enviar() {
   timer = null;
-  if (enviando || !store || !state.activo || !state.usuario || !state.competicion) return;
+  if (enviando || !store || !state.activo || !state.usuario || !state.competicion || state.abriendo) return;
   if (!hayPendiente()) {
     set({ estado: "sincronizado", pendientes: 0 });
     return;
@@ -295,7 +335,10 @@ async function enviar() {
     });
     borradas.forEach((id) => dirty.borradas.delete(id));
     if (grupo && ahora.lifting === s.lifting) dirty.grupo = false;
-    if (meet && ahora.meet === s.meet) dirty.meet = false;
+    if (meet && ahora.meet === s.meet) {
+      dirty.meet = false;
+      dirty.editado = false;
+    }
     guardarDirty();
     espera = 2000;
     set({
@@ -308,8 +351,8 @@ async function enviar() {
     });
   } catch (e) {
     const err = e as ApiError;
-    if (err.status === 401 && !state.auto) {
-      set({ usuario: null, estado: "error", error: err.message });
+    if (err.status === 401) {
+      set({ usuario: null, estado: "error", error: err.message }); // the login gate comes back
     } else {
       set({ estado: "error", error: err.message || "Sin conexión con GR Cup. Se reintentará." });
     }
@@ -351,6 +394,7 @@ export function abrirMesa(c: Competicion, mesa: string, nuevo: GlobalState) {
   dirty.todo = false;
   dirty.grupo = false;
   dirty.meet = false;
+  dirty.editado = false;
   guardarDirty();
   if (store) store.dispatch(overwriteStore(nuevo));
   conectar(c, mesa);
@@ -373,42 +417,17 @@ export function aplicarEstado(r: EstadoMesa) {
   set({ mesaEstado: r });
 }
 
-// iniciar runs once when the app opens. If the server publishes /grcup-config.json with «auto», this desk is
-// connected by default to that competition (the server holds the key); otherwise the GR Cup session is restored
-// from the platform's refresh cookie, if any.
-export async function iniciar(): Promise<void> {
-  try {
-    const res = await fetch("/grcup-config.json", { cache: "no-store" });
-    const cfg = res.ok ? await res.json() : null;
-    if (cfg && cfg.auto && cfg.competicion && cfg.competicion.id) {
-      setModoAuto(true);
-      const usuario: Usuario = {
-        id: "",
-        email: "",
-        nombre: cfg.nombre || "Mesa GR Cup",
-        root: false,
-        competiciones: [],
-      };
-      const cambia = !state.competicion || state.competicion.id !== cfg.competicion.id;
-      dirty.todo = true;
-      dirty.grupo = true;
-      guardarDirty();
-      // a desk paused by hand stays paused on reload; a new competition always starts
-      set({
-        auto: true,
-        usuario,
-        competicion: cfg.competicion,
-        activo: cambia || state.activo || !state.mesa,
-        error: "",
-      });
-      programar(0);
-      return;
-    }
-  } catch (e) {
-    // no config (local development): manual login
-  }
-  const u = await renovar().catch(() => null);
-  if (u) setUsuario(u);
+// reanudarEnvio sends what is pending (after the meet opened on signing in).
+export function reanudarEnvio() {
+  programar(0);
+}
+
+export function setGrcup(p: Partial<GrcupState>) {
+  set(p);
+}
+
+export function estadoMeet(): GlobalState | null {
+  return store ? store.getState() : null;
 }
 
 // Retry when the network comes back or the desk tab is shown again (a sleeping laptop may miss «online»).
