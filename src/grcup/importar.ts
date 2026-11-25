@@ -35,7 +35,7 @@ export type AtletaGR = {
 const FLIGHTS = "ABCDEFGHIJKLMNOP";
 
 // clave: name without accents, case or punctuation, words in any order.
-const clave = (s: string) =>
+export const clave = (s: string) =>
   s
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
