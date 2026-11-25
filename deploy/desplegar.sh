@@ -42,7 +42,8 @@ KEYVAR="GRCUP_OPENLIFTER_KEY_$(echo "$ENTORNO" | tr '[:lower:]' '[:upper:]')"
 envvar() {
   if [ -z "${!1:-}" ] && [ -f "$HOME/.env" ]; then
     local val
-    val=$(grep -E "^$1=" "$HOME/.env" | tail -1 | cut -d= -f2- | sed -E 's/^["'"'"']//; s/["'"'"']$//')
+    # a variable missing from ~/.env is not an error (grep exits 1): the desk then logs in with its account
+    val=$({ grep -E "^$1=" "$HOME/.env" || true; } | tail -1 | cut -d= -f2- | sed -E 's/^["'"'"']//; s/["'"'"']$//')
     export "$1=$val"
   fi
 }
