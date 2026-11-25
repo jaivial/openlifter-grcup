@@ -299,7 +299,8 @@ async function enviar() {
     guardarDirty();
     espera = 2000;
     set({
-      mesaEstado: r,
+      // a meet opened from the server while this request flew: its links belong to the previous key
+      mesaEstado: state.mesa === mesa ? r : state.mesaEstado,
       ultimaSync: Date.now(),
       error: "",
       estado: hayPendiente() ? "pendiente" : "sincronizado",
