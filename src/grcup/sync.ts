@@ -11,6 +11,7 @@
 import { Middleware } from "redux";
 
 import { api, ApiError, Usuario, Competicion, renovar, setModoAuto } from "./api";
+import { overwriteStore } from "../actions/globalActions";
 import { Entry } from "../types/dataTypes";
 import { GlobalState } from "../types/stateTypes";
 
@@ -113,15 +114,16 @@ function set(p: Partial<GrcupState>) {
 
 // ---- pending changes ----
 
-type Dirty = { todo: boolean; ids: Array<number>; borradas: Array<number>; grupo: boolean };
-const dirty: { todo: boolean; ids: Set<number>; borradas: Set<number>; grupo: boolean } = (() => {
+// meet: the meet setup changed (the server keeps it for «Competiciones preparadas»).
+type Dirty = { todo: boolean; ids: Array<number>; borradas: Array<number>; grupo: boolean; meet?: boolean };
+const dirty: { todo: boolean; ids: Set<number>; borradas: Set<number>; grupo: boolean; meet: boolean } = (() => {
   try {
     const d: Dirty = JSON.parse(localStorage.getItem(LS_DIRTY) || "null");
-    if (d) return { todo: d.todo, ids: new Set(d.ids), borradas: new Set(d.borradas), grupo: d.grupo };
+    if (d) return { todo: d.todo, ids: new Set(d.ids), borradas: new Set(d.borradas), grupo: d.grupo, meet: !!d.meet };
   } catch (e) {
     // ignore
   }
-  return { todo: false, ids: new Set<number>(), borradas: new Set<number>(), grupo: false };
+  return { todo: false, ids: new Set<number>(), borradas: new Set<number>(), grupo: false, meet: false };
 })();
 
 function guardarDirty() {
@@ -130,13 +132,14 @@ function guardarDirty() {
     ids: Array.from(dirty.ids),
     borradas: Array.from(dirty.borradas),
     grupo: dirty.grupo,
+    meet: dirty.meet,
   };
   localStorage.setItem(LS_DIRTY, JSON.stringify(d));
 }
 
 function contarPendientes(): number {
   if (dirty.todo) return getStore() ? getStore()!.getState().registration.entries.length : 1;
-  return dirty.ids.size + dirty.borradas.size + (dirty.grupo ? 1 : 0);
+  return dirty.ids.size + dirty.borradas.size + (dirty.grupo ? 1 : 0) + (dirty.meet ? 1 : 0);
 }
 
 // ---- the Redux store ----
@@ -159,6 +162,7 @@ export const grcupMiddleware: Middleware = (api0) => {
     if (action && (action.type === "OVERWRITE_STORE" || action.type === "persist/REHYDRATE")) {
       dirty.todo = true; // a loaded file or a reload: send everything once
       dirty.grupo = true;
+      dirty.meet = true;
     } else if (prev.registration !== cur.registration) {
       const antes = new Map<number, Entry>();
       prev.registration.entries.forEach((e) => antes.set(e.id, e));
@@ -176,6 +180,7 @@ export const grcupMiddleware: Middleware = (api0) => {
       });
     }
     if (prev.lifting !== cur.lifting) dirty.grupo = true;
+    if (prev.meet !== cur.meet) dirty.meet = true;
     if (prev !== cur) {
       guardarDirty();
       programar(300);
@@ -213,6 +218,13 @@ function aEntrada(e: Entry) {
     squatStatus: nums(e.squatStatus),
     benchStatus: nums(e.benchStatus),
     deadliftStatus: nums(e.deadliftStatus),
+    age: Number(e.age) || 0,
+    country: txt(e.country, 100),
+    state: txt(e.state, 100),
+    equipment: txt(e.equipment, 20),
+    events: (e.events || []).slice(0, 10).map((x) => txt(x, 10)),
+    paid: !!e.paid,
+    guest: !!e.guest,
   };
 }
 
@@ -231,7 +243,12 @@ function programar(ms: number) {
 }
 
 function hayPendiente() {
-  return dirty.todo || dirty.ids.size > 0 || dirty.borradas.size > 0 || dirty.grupo;
+  return dirty.todo || dirty.ids.size > 0 || dirty.borradas.size > 0 || dirty.grupo || dirty.meet;
+}
+
+// Changes of this browser that GR Cup has not received yet.
+export function hayCambiosSinEnviar(): boolean {
+  return hayPendiente();
 }
 
 async function enviar() {
@@ -252,6 +269,7 @@ async function enviar() {
   });
   const borradas = Array.from(dirty.borradas);
   const grupo = dirty.grupo;
+  const meet = dirty.meet;
   persistido.rev += 1;
   const body = {
     mesa,
@@ -260,6 +278,8 @@ async function enviar() {
     grupo: { day: s.lifting.day, platform: s.lifting.platform, flight: s.lifting.flight, lift: s.lifting.lift },
     entradas: Array.from(enviadas.values()).map(aEntrada),
     borradas,
+    // the setup of a named meet (not OpenLifter's empty «New Meet») is kept for «Competiciones preparadas»
+    ...(meet && s.meet.name.trim() !== "" ? { meet: s.meet } : {}),
   };
   enviando = true;
   set({ estado: "enviando" });
@@ -275,10 +295,12 @@ async function enviar() {
     });
     borradas.forEach((id) => dirty.borradas.delete(id));
     if (grupo && ahora.lifting === s.lifting) dirty.grupo = false;
+    if (meet && ahora.meet === s.meet) dirty.meet = false;
     guardarDirty();
     espera = 2000;
     set({
-      mesaEstado: r,
+      // a meet opened from the server while this request flew: its links belong to the previous key
+      mesaEstado: state.mesa === mesa ? r : state.mesaEstado,
       ultimaSync: Date.now(),
       error: "",
       estado: hayPendiente() ? "pendiente" : "sincronizado",
@@ -312,9 +334,26 @@ export function setUsuario(u: Usuario | null) {
 export function conectar(c: Competicion, mesa: string) {
   dirty.todo = true;
   dirty.grupo = true;
+  dirty.meet = true;
   guardarDirty();
   set({ competicion: c, mesa: mesa.trim().slice(0, 120), activo: true, error: "", mesaEstado: null });
   programar(0);
+}
+
+// abrirMesa replaces this browser's meet with one opened from the server and synchronises it under the server's
+// key (the same entry ids: nothing is duplicated). Whatever was pending for the previous meet is dropped (the desk
+// was asked first), so it never reaches the new key.
+export function abrirMesa(c: Competicion, mesa: string, nuevo: GlobalState) {
+  if (timer) clearTimeout(timer);
+  set({ activo: false, mesaEstado: null });
+  dirty.ids.clear();
+  dirty.borradas.clear();
+  dirty.todo = false;
+  dirty.grupo = false;
+  dirty.meet = false;
+  guardarDirty();
+  if (store) store.dispatch(overwriteStore(nuevo));
+  conectar(c, mesa);
 }
 
 export function pausar() {
@@ -325,6 +364,7 @@ export function pausar() {
 export function sincronizarTodo() {
   dirty.todo = true;
   dirty.grupo = true;
+  dirty.meet = true;
   guardarDirty();
   programar(0);
 }
