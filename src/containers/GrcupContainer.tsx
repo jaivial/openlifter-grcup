@@ -48,7 +48,7 @@ const etiquetas: Record<Vinculo["vinculo"], [string, string]> = {
   ignorado: ["secondary", "No se sincroniza"],
 };
 
-const pct = (x: number) => `${Math.round(x * 100)} %`;
+const pct = (x: number) => `${Math.round(x * 100)}\u00a0%`;
 
 const fechaLarga = (f: string) => {
   const d = new Date(`${f}T12:00:00`);
@@ -441,7 +441,7 @@ const GrcupContainer = () => {
                         return (
                           <tr key={v.entryId}>
                             <td>{v.nombreOL || <i>(sin nombre)</i>}</td>
-                            <td>
+                            <td style={{ whiteSpace: "nowrap" }}>
                               <Badge variant={e[0] as any}>{e[1]}</Badge>{" "}
                               {v.puntuacion > 0 && <small>{pct(v.puntuacion)}</small>}
                             </td>

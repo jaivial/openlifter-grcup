@@ -12,6 +12,7 @@ import { Middleware } from "redux";
 
 import { api, ApiError, Usuario, Competicion } from "./api";
 import { overwriteStore } from "../actions/globalActions";
+import { updateRegistration } from "../actions/registrationActions";
 import { Entry } from "../types/dataTypes";
 import { GlobalState } from "../types/stateTypes";
 
@@ -42,6 +43,17 @@ export type EstadoMesa = {
   vinculos: Array<Vinculo>;
   avisos: Array<{ entryId?: number; mensaje: string }>;
   aplicado: { pesajes: number; intentos: number; veredictos: number; correcciones: number; estado: boolean };
+  // «Previa del pesaje» saved by linked athletes not weighed yet (older platforms omit it)
+  precargas?: Array<Precarga>;
+};
+
+export type Precarga = {
+  entryId: number;
+  squatRackInfo?: string;
+  benchRackInfo?: string;
+  squatKg?: number;
+  benchKg?: number;
+  deadliftKg?: number;
 };
 
 export type GrcupState = {
@@ -268,6 +280,28 @@ function aEntrada(e: Entry) {
   };
 }
 
+// Fills only what the desk left empty, and only before the weigh-in; the middleware sends the entry back.
+function aplicarPrecargas(precargas: Array<Precarga> | undefined) {
+  if (!store || !Array.isArray(precargas)) return;
+  for (const p of precargas) {
+    const e = store.getState().registration.entries.find((x) => x.id === p.entryId);
+    if (!e || e.bodyweightKg !== 0) continue;
+    const cambios: Partial<Entry> = {};
+    const compite = (letra: string) => (e.events || []).some((ev) => ev.includes(letra));
+    if (compite("S") && e.squatRackInfo === "" && p.squatRackInfo) cambios.squatRackInfo = String(p.squatRackInfo);
+    if (compite("B") && e.benchRackInfo === "" && p.benchRackInfo) cambios.benchRackInfo = String(p.benchRackInfo);
+    const primero = (letra: string, kg: Array<number>, nuevo: number | undefined) =>
+      compite(letra) && kg[0] === 0 && typeof nuevo === "number" && nuevo > 0 ? [nuevo, ...kg.slice(1)] : null;
+    const sq = primero("S", e.squatKg, p.squatKg);
+    const bp = primero("B", e.benchKg, p.benchKg);
+    const dl = primero("D", e.deadliftKg, p.deadliftKg);
+    if (sq) cambios.squatKg = sq;
+    if (bp) cambios.benchKg = bp;
+    if (dl) cambios.deadliftKg = dl;
+    if (Object.keys(cambios).length > 0) store.dispatch(updateRegistration(e.id, cambios));
+  }
+}
+
 let timer: ReturnType<typeof setTimeout> | null = null;
 let enviando = false;
 let espera = 2000;
@@ -340,6 +374,7 @@ async function enviar() {
       dirty.editado = false;
     }
     guardarDirty();
+    if (state.mesa === mesa) aplicarPrecargas(r.precargas);
     espera = 2000;
     set({
       // a meet opened from the server while this request flew: its links belong to the previous key
