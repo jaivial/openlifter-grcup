@@ -287,13 +287,14 @@ function aplicarPrecargas(precargas: Array<Precarga> | undefined) {
     const e = store.getState().registration.entries.find((x) => x.id === p.entryId);
     if (!e || e.bodyweightKg !== 0) continue;
     const cambios: Partial<Entry> = {};
-    if (e.squatRackInfo === "" && p.squatRackInfo) cambios.squatRackInfo = String(p.squatRackInfo);
-    if (e.benchRackInfo === "" && p.benchRackInfo) cambios.benchRackInfo = String(p.benchRackInfo);
-    const primero = (kg: Array<number>, nuevo: number | undefined) =>
-      kg[0] === 0 && typeof nuevo === "number" && nuevo > 0 ? [nuevo, ...kg.slice(1)] : null;
-    const sq = primero(e.squatKg, p.squatKg);
-    const bp = primero(e.benchKg, p.benchKg);
-    const dl = primero(e.deadliftKg, p.deadliftKg);
+    const compite = (letra: string) => (e.events || []).some((ev) => ev.includes(letra));
+    if (compite("S") && e.squatRackInfo === "" && p.squatRackInfo) cambios.squatRackInfo = String(p.squatRackInfo);
+    if (compite("B") && e.benchRackInfo === "" && p.benchRackInfo) cambios.benchRackInfo = String(p.benchRackInfo);
+    const primero = (letra: string, kg: Array<number>, nuevo: number | undefined) =>
+      compite(letra) && kg[0] === 0 && typeof nuevo === "number" && nuevo > 0 ? [nuevo, ...kg.slice(1)] : null;
+    const sq = primero("S", e.squatKg, p.squatKg);
+    const bp = primero("B", e.benchKg, p.benchKg);
+    const dl = primero("D", e.deadliftKg, p.deadliftKg);
     if (sq) cambios.squatKg = sq;
     if (bp) cambios.benchKg = bp;
     if (dl) cambios.deadliftKg = dl;
