@@ -59,7 +59,10 @@ export async function aplicarHorario(store: Store, cid: string, mesa: string) {
   if (!cid || !mesa) return;
   let r: HorarioMesa;
   try {
-    r = await api<HorarioMesa>("GET", `/api/admin/competiciones/${cid}/openlifter/horario?mesa=${encodeURIComponent(mesa)}`);
+    r = await api<HorarioMesa>(
+      "GET",
+      `/api/admin/competiciones/${cid}/openlifter/horario?mesa=${encodeURIComponent(mesa)}`,
+    );
   } catch (e) {
     return; // sin red o sin permiso: se reintenta en la siguiente vuelta
   }
