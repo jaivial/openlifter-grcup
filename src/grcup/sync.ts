@@ -13,6 +13,7 @@ import { Middleware } from "redux";
 import { api, ApiError, Usuario, Competicion } from "./api";
 import { overwriteStore } from "../actions/globalActions";
 import { updateRegistration } from "../actions/registrationActions";
+import { aplicarHorario } from "./horario";
 import { Entry } from "../types/dataTypes";
 import { GlobalState } from "../types/stateTypes";
 
@@ -474,4 +475,10 @@ if (typeof window !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") reintentar();
   });
+  // The published schedule changes while the meet is open (sessions and athletes from the backoffice): the desk
+  // asks for it every few seconds and moves its entries to the new version, without reopening the meet.
+  setInterval(() => {
+    if (!store || !state.activo || !state.usuario || !state.competicion || state.abriendo) return;
+    void aplicarHorario(store, state.competicion.id, state.mesa || mesaPorDefecto(store.getState()));
+  }, 20000);
 }
